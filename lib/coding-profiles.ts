@@ -5,14 +5,11 @@ const LEETCODE_API_URL = "https://leetcode.com/graphql"
 
 export async function fetchLeetCodeStats() {
   try {
-    // LeetCode username - updated with the correct username
-    const username = "abhijeet_kumar27" // Correct username from the provided URL
+    const username = "abhijeet_kumar27"
 
-    // GraphQL query to fetch user profile data including contest rating
     const query = `
-      query userPublicProfile($username: String!) {
+      query userProfile($username: String!) {
         matchedUser(username: $username) {
-          username
           submitStats: submitStatsGlobal {
             acSubmissionNum {
               difficulty
@@ -30,23 +27,10 @@ export async function fetchLeetCodeStats() {
             rating
             globalRanking
             totalParticipants
-            topPercentage
             badge {
               name
             }
-          }
-          userContestRankingHistory {
-            attended
-            trendDirection
-            problemsSolved
-            totalProblems
-            finishTimeInSeconds
-            rating
-            ranking
-            contest {
-              title
-              startTime
-            }
+            topPercentage
           }
         }
       }
@@ -54,92 +38,78 @@ export async function fetchLeetCodeStats() {
 
     const response = await fetch(LEETCODE_API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query,
-        variables: { username },
-      }),
-      cache: "no-store", // Disable caching to always get fresh data
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables: { username } }),
+      cache: "no-store",
     })
 
-    if (!response.ok) {
-      console.log(`LeetCode API responded with status: ${response.status}`)
-      return getFallbackLeetCodeStats()
-    }
+    if (!response.ok) return getFallbackLeetCodeStats()
 
-    const data = await response.json()
+    const result = await response.json()
+    const matchedUser = result?.data?.matchedUser
+    if (!matchedUser) return getFallbackLeetCodeStats()
 
-    if (data.errors) {
-      console.log(`LeetCode API error: ${data.errors[0].message}`)
-      return getFallbackLeetCodeStats()
-    }
+    const { submitStats, profile, userContestRanking } = matchedUser
+    const acSubmissionNum = submitStats?.acSubmissionNum || []
 
-    if (!data.data || !data.data.matchedUser) {
-      console.log("LeetCode user not found, using fallback data")
-      return getFallbackLeetCodeStats()
-    }
+    // Problem stats
+    const totalSolved = acSubmissionNum.find((x: any) => x.difficulty === "All")?.count || 0
+    const easySolved = acSubmissionNum.find((x: any) => x.difficulty === "Easy")?.count || 0
+    const mediumSolved = acSubmissionNum.find((x: any) => x.difficulty === "Medium")?.count || 0
+    const hardSolved = acSubmissionNum.find((x: any) => x.difficulty === "Hard")?.count || 0
 
-    const { matchedUser } = data.data
-    const { submitStats, profile, userContestRanking, userContestRankingHistory } = matchedUser
+    const totalSubmissions = acSubmissionNum.find((x: any) => x.difficulty === "All")?.submissions || 0
+    const acceptanceRate = totalSubmissions ? Math.round((totalSolved / totalSubmissions) * 1000) / 10 : 0
 
-    // Extract the submission stats
-    const acSubmissionNum = submitStats.acSubmissionNum
-    const totalSolved = acSubmissionNum.find((item: any) => item.difficulty === "All")?.count || 0
-    const easySolved = acSubmissionNum.find((item: any) => item.difficulty === "Easy")?.count || 0
-    const mediumSolved = acSubmissionNum.find((item: any) => item.difficulty === "Medium")?.count || 0
-    const hardSolved = acSubmissionNum.find((item: any) => item.difficulty === "Hard")?.count || 0
-
-    // Calculate acceptance rate (this is an approximation)
-    const totalSubmissions = acSubmissionNum.find((item: any) => item.difficulty === "All")?.submissions || 0
-    const acceptanceRate = totalSubmissions > 0 ? Math.round((totalSolved / totalSubmissions) * 100 * 10) / 10 : 0
-
-    // Extract contest information
+    // Contest stats
     const contestRating = userContestRanking?.rating || 0
+    const contestBadge = userContestRanking?.badge?.name || ""
     const contestRanking = userContestRanking?.globalRanking || 0
     const contestsAttended = userContestRanking?.attendedContestsCount || 0
-    const contestBadge = userContestRanking?.badge?.name || ""
     const totalContestParticipants = userContestRanking?.totalParticipants || 0
     const topPercentage = userContestRanking?.topPercentage || 100
 
-    // Get recent contest history (last 5 contests)
-    const recentContests = userContestRankingHistory
-      ? userContestRankingHistory
-          .filter((contest: any) => contest.attended)
-          .slice(0, 5)
-          .map((contest: any) => ({
-            title: contest.contest.title,
-            date: new Date(contest.contest.startTime * 1000).toLocaleDateString(),
-            rating: contest.rating,
-            ranking: contest.ranking,
-            problemsSolved: contest.problemsSolved,
-            totalProblems: contest.totalProblems,
-          }))
-      : []
-
     return {
       totalSolved,
-      totalQuestions: 2500, // LeetCode has approximately 2500 questions, this is a static value
+      totalQuestions: 3549,
       easySolved,
       mediumSolved,
       hardSolved,
       acceptanceRate,
-      ranking: profile.ranking || 0,
-      contributionPoints: profile.reputation || 0,
-      reputation: profile.reputation || 0,
+      ranking: profile?.ranking || 0,
+      contributionPoints: profile?.reputation || 0,
+      reputation: profile?.reputation || 0,
       contestRating,
+      contestBadge,
       contestRanking,
       contestsAttended,
-      contestBadge,
       totalContestParticipants,
       topPercentage,
-      recentContests,
     }
   } catch (error) {
     console.error("Error fetching LeetCode stats:", error)
-    // Return fallback data if the API call fails
     return getFallbackLeetCodeStats()
+  }
+}
+
+// Fallback
+function getFallbackLeetCodeStats() {
+  return {
+    totalSolved: 1241,
+    totalQuestions: 3549,
+    easySolved: 317,
+    mediumSolved: 826,
+    hardSolved: 98,
+    acceptanceRate: 65.4,
+    ranking: 9224,
+    contributionPoints: 0,
+    reputation: 0,
+    contestRating: 2066,
+    contestBadge: "Knight",
+    contestRanking: 12379,
+    contestsAttended: 46,
+    totalContestParticipants: 100000,
+    topPercentage: 1.87,
   }
 }
 
@@ -222,26 +192,7 @@ export async function fetchCodeforcesStats() {
 }
 
 // Fallback data in case the API calls fail
-function getFallbackLeetCodeStats() {
-  return {
-    totalSolved: 1241, // Updated based on screenshot
-    totalQuestions: 3549, // Updated based on screenshot
-    easySolved: 317, // Updated based on screenshot
-    mediumSolved: 826, // Updated based on screenshot
-    hardSolved: 98, // Updated based on screenshot
-    acceptanceRate: 65.4,
-    ranking: 9224, // Updated based on screenshot
-    contributionPoints: 0,
-    reputation: 0,
-    contestRating: 2066, // Based on the screenshot
-    contestRanking: 12379, // Based on the screenshot
-    contestsAttended: 46, // Based on the screenshot
-    contestBadge: "Knight", // Based on the screenshot
-    totalContestParticipants: 100000, // Approximate
-    topPercentage: 1.87, // Based on the screenshot
-    recentContests: [],
-  }
-}
+
 
 function getFallbackCodeChefStats() {
   // More accurate fallback data based on the user's profile
