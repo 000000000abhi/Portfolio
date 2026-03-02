@@ -7,7 +7,7 @@ import { GraduationCap, BookOpen, Calendar } from "lucide-react"
 export function AcademicInfo() {
   const academicInfo = {
     overallCGPA: 9.3,
-    currentSemester: 6,
+    currentSemester: 8,
     totalSemesters: 8,
     university: "Graphic Era Deemed to be University",
     degree: "B.Tech in Computer Science and Engineering",
@@ -17,10 +17,10 @@ export function AcademicInfo() {
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
-      transition={{ type: "spring", stiffness: 300 }}
+      transition={{ type: "spring", stiffness: 300 ,duration:0.5}}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      
     >
       <Card className="overflow-hidden border-2 hover:border-primary/50 transition-colors">
         <CardContent className="p-6">

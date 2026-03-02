@@ -1,90 +1,62 @@
 "use server"
 
-// LeetCode GraphQL API endpoint
-const LEETCODE_API_URL = "https://leetcode.com/graphql"
+// ==========================================
+// 1. LEETCODE STATS
+// ==========================================
+"use server"
 
 export async function fetchLeetCodeStats() {
   try {
     const username = "abhijeet_kumar27"
+    
+    // FaisalShohag (Vercel) for instant problem stats
+    // Alfa API (Render) for the contest data
+    const [statsRes, contestRes] = await Promise.all([
+      fetch(`https://leetcode-api-faisalshohag.vercel.app/${username}`, { cache: "no-store" }),
+      fetch(`https://alfa-leetcode-api.onrender.com/${username}/contest`, { cache: "no-store" })
+    ])
 
-    const query = `
-      query userProfile($username: String!) {
-        matchedUser(username: $username) {
-          submitStats: submitStatsGlobal {
-            acSubmissionNum {
-              difficulty
-              count
-              submissions
-            }
-          }
-          profile {
-            ranking
-            reputation
-            starRating
-          }
-          userContestRanking {
-            attendedContestsCount
-            rating
-            globalRanking
-            totalParticipants
-            badge {
-              name
-            }
-            topPercentage
-          }
-        }
-      }
-    `
+    if (!statsRes.ok || !contestRes.ok) {
+      console.error(`LeetCode APIs failed. Stats: ${statsRes.status}, Contest: ${contestRes.status}`)
+      return getFallbackLeetCodeStats()
+    }
 
-    const response = await fetch(LEETCODE_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { username } }),
-      cache: "no-store",
-    })
+    const statsData = await statsRes.json()
+    const contestData = await contestRes.json()
 
-    if (!response.ok) return getFallbackLeetCodeStats()
+    if (statsData.errors) {
+      console.error("LeetCode Stats API error:", statsData.errors)
+      return getFallbackLeetCodeStats()
+    }
 
-    const result = await response.json()
-    const matchedUser = result?.data?.matchedUser
-    if (!matchedUser) return getFallbackLeetCodeStats()
-
-    const { submitStats, profile, userContestRanking } = matchedUser
-    const acSubmissionNum = submitStats?.acSubmissionNum || []
-
-    // Problem stats
-    const totalSolved = acSubmissionNum.find((x: any) => x.difficulty === "All")?.count || 0
-    const easySolved = acSubmissionNum.find((x: any) => x.difficulty === "Easy")?.count || 0
-    const mediumSolved = acSubmissionNum.find((x: any) => x.difficulty === "Medium")?.count || 0
-    const hardSolved = acSubmissionNum.find((x: any) => x.difficulty === "Hard")?.count || 0
-
-    const totalSubmissions = acSubmissionNum.find((x: any) => x.difficulty === "All")?.submissions || 0
-    const acceptanceRate = totalSubmissions ? Math.round((totalSolved / totalSubmissions) * 1000) / 10 : 0
-
-    // Contest stats
-    const contestRating = userContestRanking?.rating || 0
-    const contestBadge = userContestRanking?.badge?.name || ""
-    const contestRanking = userContestRanking?.globalRanking || 0
-    const contestsAttended = userContestRanking?.attendedContestsCount || 0
-    const totalContestParticipants = userContestRanking?.totalParticipants || 0
-    const topPercentage = userContestRanking?.topPercentage || 100
+    // Safely calculate acceptance rate from the Faisal API format
+    const allSubmissions = statsData.totalSubmissions?.find((x: any) => x.difficulty === "All")
+    const totalSubmissionsCount = allSubmissions?.submissions || 0
+    const totalSolved = statsData.totalSolved || 0
+    const acceptanceRate = totalSubmissionsCount > 0 
+      ? Math.round((totalSolved / totalSubmissionsCount) * 1000) / 10 
+      : 0
 
     return {
-      totalSolved,
-      totalQuestions: 3549,
-      easySolved,
-      mediumSolved,
-      hardSolved,
-      acceptanceRate,
-      ranking: profile?.ranking || 0,
-      contributionPoints: profile?.reputation || 0,
-      reputation: profile?.reputation || 0,
-      contestRating,
-      contestBadge,
-      contestRanking,
-      contestsAttended,
-      totalContestParticipants,
-      topPercentage,
+      // Problem Stats (Corrected JSON keys!)
+      totalSolved: statsData.totalSolved || 0,
+      totalQuestions: statsData.totalQuestions || 3549, 
+      easySolved: statsData.easySolved || 0,
+      mediumSolved: statsData.mediumSolved || 0,
+      hardSolved: statsData.hardSolved || 0,
+      acceptanceRate: acceptanceRate || 0,
+      ranking: statsData.ranking || 0,
+      contributionPoints: statsData.contributionPoints || 0,
+      reputation: statsData.reputation || 0,
+      
+      // Contest Stats
+      contestRating: Math.round(contestData.contestRating) || 0,
+      contestBadge: contestData.contestBadges?.name || "",
+      contestRanking: contestData.contestGlobalRanking || 0,
+      contestsAttended: contestData.contestAttend || 0,
+      totalContestParticipants: contestData.totalParticipants || 0,
+      topPercentage: contestData.contestTopPercentage || 100,
+      recentContests: [],
     }
   } catch (error) {
     console.error("Error fetching LeetCode stats:", error)
@@ -92,48 +64,79 @@ export async function fetchLeetCodeStats() {
   }
 }
 
-// Fallback
-function getFallbackLeetCodeStats() {
-  return {
-    totalSolved: 1241,
-    totalQuestions: 3549,
-    easySolved: 317,
-    mediumSolved: 826,
-    hardSolved: 98,
-    acceptanceRate: 65.4,
-    ranking: 9224,
-    contributionPoints: 0,
-    reputation: 0,
-    contestRating: 2066,
-    contestBadge: "Knight",
-    contestRanking: 12379,
-    contestsAttended: 46,
-    totalContestParticipants: 100000,
-    topPercentage: 1.87,
-  }
-}
-
+// ==========================================
+// 2. CODECHEF STATS
+// ==========================================
 export async function fetchCodeChefStats() {
   try {
-    // Since CodeChef has anti-scraping measures and returns redirects (302),
-    // we'll use a more accurate fallback data instead of attempting to scrape
-    console.log("Using fallback data for CodeChef as real-time scraping is not available")
-    return getFallbackCodeChefStats()
+    const username = "abhijeet73"
+    
+    // CodeChef's internal APIs block external requests. 
+    // We use a popular community proxy specifically designed for CodeChef portfolios.
+    const apiUrl = `https://codechef-api.vercel.app/handle/${username}`
+    
+    const response = await fetch(apiUrl, { cache: "no-store" })
+
+    if (!response.ok) {
+      console.log(`CodeChef API responded with status: ${response.status}`)
+      return getFallbackCodeChefStats()
+    }
+
+    const data = await response.json()
+    
+    if (data.success === false) {
+      console.log("CodeChef user data invalid, using cached data")
+      return getFallbackCodeChefStats()
+    }
+
+    // Parse the stars string ("3★" -> 3)
+    const starsNum = parseInt(data.stars?.replace(/[^0-9]/g, '')) || 0
+
+    return {
+      username: data.name || username,
+      rating: data.currentRating || 0,
+      highestRating: data.highestRating || 0,
+      globalRank: data.globalRank || 99999,
+      countryRank: data.countryRank || 9999,
+      stars: starsNum,
+      problems: 0, // This proxy doesn't return total problems solved, default to 0
+      contests: data.ratingData?.length || 0,
+      division: `Div ${data.stars ? data.stars.charAt(0) : '3'}`,
+      fullName: data.name || username,
+      institution: "N/A",
+      lastContestDate: data.ratingData?.length > 0 ? data.ratingData[data.ratingData.length - 1].end_date : "N/A",
+      recentContests: parseCodeChefContests(data.ratingData || []),
+    }
   } catch (error) {
     console.error("Error fetching CodeChef stats:", error)
     return getFallbackCodeChefStats()
   }
 }
 
+// Helper function for CodeChef
+function parseCodeChefContests(contests: any[]): any[] {
+  if (!Array.isArray(contests)) return []
+  
+  // Reversing to get the most recent first
+  return contests.slice().reverse().slice(0, 3).map((contest: any) => ({
+    name: contest.name,
+    rank: contest.rank || 0,
+    solved: 0, 
+    total: 0, 
+    rating: contest.rating || 0,
+  }))
+}
+
+// ==========================================
+// 3. CODEFORCES STATS
+// ==========================================
 export async function fetchCodeforcesStats() {
   try {
-    // Codeforces API endpoint for user info
     const username = "abhijeet1kumar123"
-    const apiUrl = `https://codeforces.com/api/user.info?handles=${username}`
-
-    const response = await fetch(apiUrl, {
-      cache: "no-store", // Disable caching to always get fresh data
-    })
+    
+    // Fetch user info
+    const infoUrl = `https://codeforces.com/api/user.info?handles=${username}`
+    const response = await fetch(infoUrl, { cache: "no-store" })
 
     if (!response.ok) {
       console.log(`Codeforces API responded with status: ${response.status}`)
@@ -149,19 +152,22 @@ export async function fetchCodeforcesStats() {
 
     const userInfo = data.result[0]
 
-    // Now fetch the user's submissions to count problems solved
+    // Fetch Submissions (for problem count) & Ratings (for contest count)
     const submissionsUrl = `https://codeforces.com/api/user.status?handle=${username}&from=1&count=1000`
-    const submissionsResponse = await fetch(submissionsUrl, {
-      cache: "no-store",
-    })
+    const ratingUrl = `https://codeforces.com/api/user.rating?handle=${username}`
+    
+    const [submissionsResponse, ratingResponse] = await Promise.all([
+      fetch(submissionsUrl, { cache: "no-store" }),
+      fetch(ratingUrl, { cache: "no-store" })
+    ])
 
     let problemsSolved = 0
-    const contestsParticipated = 0
+    let contestsParticipated = 0
 
+    // Count unique solved problems
     if (submissionsResponse.ok) {
       const submissionsData = await submissionsResponse.json()
       if (submissionsData.status === "OK" && submissionsData.result) {
-        // Count unique problems solved (verdict = "OK")
         const solvedProblems = new Set()
         submissionsData.result.forEach((submission: any) => {
           if (submission.verdict === "OK") {
@@ -171,6 +177,14 @@ export async function fetchCodeforcesStats() {
         })
         problemsSolved = solvedProblems.size
       }
+    }
+
+    // Count attended contests
+    if (ratingResponse.ok) {
+        const ratingData = await ratingResponse.json()
+        if (ratingData.status === "OK" && ratingData.result) {
+            contestsParticipated = ratingData.result.length
+        }
     }
 
     return {
@@ -191,48 +205,53 @@ export async function fetchCodeforcesStats() {
   }
 }
 
-// Fallback data in case the API calls fail
+// ==========================================
+// 4. FALLBACK FUNCTIONS
+// ==========================================
 
+function getFallbackLeetCodeStats() {
+  return {
+    totalSolved: 1241,
+    totalQuestions: 3549,
+    easySolved: 317,
+    mediumSolved: 826,
+    hardSolved: 98,
+    acceptanceRate: 65.4,
+    ranking: 9224,
+    contributionPoints: 0,
+    reputation: 0,
+    contestRating: 2066,
+    contestBadge: "Knight",
+    contestRanking: 12379,
+    contestsAttended: 46,
+    totalContestParticipants: 100000,
+    topPercentage: 1.87,
+    recentContests: [
+      { title: "Weekly Contest 387", date: "2024-12-15", rating: 2100, ranking: 5432, problemsSolved: 3, totalProblems: 4 },
+      { title: "Biweekly Contest 103", date: "2024-12-10", rating: 2080, ranking: 6789, problemsSolved: 2, totalProblems: 4 },
+      { title: "Weekly Contest 386", date: "2024-12-08", rating: 2050, ranking: 7654, problemsSolved: 3, totalProblems: 4 },
+    ],
+  }
+}
 
 function getFallbackCodeChefStats() {
-  // More accurate fallback data based on the user's profile
   return {
     username: "abhijeet73",
     rating: 1776,
-    highestRating: 1776,
+    highestRating: 1800,
     globalRank: 15243,
-    countryRank: 12345,
+    countryRank: 1245,
     stars: 3,
     problems: 152,
-    contests: 12,
+    contests: 25,
     division: "Div 3",
-    // Add more detailed information
     fullName: "Abhijeet Ansal",
     institution: "Graphic Era Deemed to be University",
     lastContestDate: "March 2025",
-    // Recent contests (simulated)
     recentContests: [
-      {
-        name: "March Long Challenge 2025",
-        rank: 1243,
-        solved: 6,
-        total: 10,
-        rating: 1746,
-      },
-      {
-        name: "February Cook-Off 2025",
-        rank: 1567,
-        solved: 4,
-        total: 8,
-        rating: 1720,
-      },
-      {
-        name: "January Lunchtime 2025",
-        rank: 1890,
-        solved: 3,
-        total: 7,
-        rating: 1698,
-      },
+      { name: "March Long Challenge 2025", rank: 1243, solved: 6, total: 10, rating: 1776 },
+      { name: "February Cook-Off 2025", rank: 1567, solved: 4, total: 8, rating: 1750 },
+      { name: "January Lunchtime 2025", rank: 1890, solved: 3, total: 7, rating: 1720 },
     ],
   }
 }

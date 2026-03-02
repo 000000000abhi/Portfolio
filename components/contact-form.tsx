@@ -9,21 +9,67 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Send, Mail, Phone, MapPin } from "lucide-react"
+import { Send, Mail, Phone, MapPin, AlertCircle } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export function ContactForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  })
+  const { toast } = useToast()
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [id]: value,
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError(null)
 
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
 
-    setIsSubmitting(false)
-    setIsSubmitted(true)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send message")
+      }
+
+      setIsSubmitting(false)
+      setIsSubmitted(true)
+      // Reset form after submission
+      setFormData({ name: "", email: "", subject: "", message: "" })
+      toast({
+        title: "Success!",
+        description: "Your message has been sent successfully.",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
+      setError(errorMessage)
+      setIsSubmitting(false)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -52,24 +98,61 @@ export function ContactForm() {
               </motion.div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex gap-2">
+                    <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive">{error}</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" placeholder="Your name" required />
+                  <Input 
+                    id="name" 
+                    placeholder="Your name" 
+                    required 
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="Your email address" required />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="Your email address" 
+                    required 
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="subject">Subject</Label>
-                  <Input id="subject" placeholder="Subject of your message" required />
+                  <Input 
+                    id="subject" 
+                    placeholder="Subject of your message" 
+                    required 
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="message">Message</Label>
-                  <Textarea id="message" placeholder="Your message" rows={5} required />
+                  <Textarea 
+                    id="message" 
+                    placeholder="Your message" 
+                    rows={5} 
+                    required 
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
