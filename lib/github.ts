@@ -30,12 +30,14 @@ export async function fetchGitHubRepos() {
 }
 
 // ✅ Fetch contributions via GraphQL API
-export async function fetchGitHubContributions(username: string = "000000000abhi") {
+export async function fetchGitHubContributions() {
   try {
     if (!process.env.GITHUB_TOKEN) {
       console.error("GitHub token is not set")
       return 0
     }
+
+    const username = "000000000abhi"
 
     const response = await fetch("https://api.github.com/graphql", {
       method: "POST",
