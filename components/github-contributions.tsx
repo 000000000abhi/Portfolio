@@ -1,51 +1,36 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExternalLink, Calendar } from "lucide-react"
-
-// Assuming this function is correctly set up to accept a username
-import { fetchGitHubContributions } from "@/lib/github" 
+import { fetchGitHubContributions } from "@/lib/github"
 
 interface GitHubContributionsProps {
   username: string
 }
 
 export function GitHubContributions({ username }: GitHubContributionsProps) {
-  const [contributions, setContributions] = useState<number | null>(null)
+  const [contributions, setContributions] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // 1. Wrap the random graph generation in useMemo 
-  // This prevents hydration errors and stops the graph from flashing on re-renders
-  const mockGraphData = useMemo(() => {
-    return Array.from({ length: 52 }).map(() =>
-      Array.from({ length: 7 }).map(() => Math.random())
-    )
-  }, [])
 
   useEffect(() => {
     async function loadContributions() {
       try {
-        setLoading(true)
-        // 2. Pass the username to the fetcher
-        const data = await fetchGitHubContributions(username) 
+        const data = await fetchGitHubContributions()
         setContributions(data)
-        setError(null)
+        setLoading(false)
       } catch (err) {
         console.error("Error fetching GitHub contributions:", err)
         setError("Failed to load GitHub contributions")
-      } finally {
         setLoading(false)
       }
     }
 
-    if (username) {
-      loadContributions()
-    }
+    loadContributions()
   }, [username])
 
   if (loading) {
@@ -61,9 +46,7 @@ export function GitHubContributions({ username }: GitHubContributionsProps) {
     )
   }
 
-  // 3. Optional: If you want to show the mock graph EVEN if it fails, 
-  // you might want to remove this error block and just rely on the fallback below.
-  if (error && !contributions) {
+  if (error) {
     return (
       <Card>
         <CardContent className="p-6 text-center">
@@ -74,7 +57,7 @@ export function GitHubContributions({ username }: GitHubContributionsProps) {
     )
   }
 
-  // Fallback if API returns 0 or null
+  // Fallback if API fails
   const contributionCount = contributions || 500
 
   return (
@@ -88,10 +71,11 @@ export function GitHubContributions({ username }: GitHubContributionsProps) {
 
           <div className="bg-muted/30 p-4 rounded-lg mb-6 overflow-hidden">
             <div className="h-32 flex items-end justify-center">
-              {/* Render the memoized graph */}
-              {mockGraphData.map((week, weekIndex) => (
+              {/* Simulated contribution graph */}
+              {Array.from({ length: 52 }).map((_, weekIndex) => (
                 <div key={weekIndex} className="flex flex-col-reverse h-full mx-px">
-                  {week.map((intensity, dayIndex) => {
+                  {Array.from({ length: 7 }).map((_, dayIndex) => {
+                    const intensity = Math.random()
                     let bgColor = "bg-muted"
 
                     if (intensity > 0.9) bgColor = "bg-primary"
@@ -114,8 +98,7 @@ export function GitHubContributions({ username }: GitHubContributionsProps) {
 
           <div className="flex justify-center">
             <Button asChild className="shadow-md hover:shadow-lg transition-all">
-              {/* 4. Use the dynamic username here */}
-              <a href={`https://github.com/${username}`} target="_blank" rel="noopener noreferrer">
+              <a href={`https://github.com/000000000abhi`} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 View GitHub Profile
               </a>
