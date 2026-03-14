@@ -3,59 +3,75 @@
 // ==========================================
 // 1. LEETCODE STATS
 // ==========================================
-"use server"
 
 export async function fetchLeetCodeStats() {
   try {
     const username = "abhijeet_kumar27"
     
-    // FaisalShohag (Vercel) for instant problem stats
-    // Alfa API (Render) for the contest data
-    const [statsRes, contestRes] = await Promise.all([
-      fetch(`https://leetcode-api-faisalshohag.vercel.app/${username}`, { cache: "no-store" }),
-      fetch(`https://alfa-leetcode-api.onrender.com/${username}/contest`, { cache: "no-store" })
-    ])
+    // Use reliable APIs with rate limit handling
+    // Primary: leetcode-stats-api (Vercel - fast & reliable)
+    // Secondary: alfa-leetcode-api (Render - for contest data)
+    const statsRes = await fetch(
+      `https://leetcode-api-faisalshohag.vercel.app/${username}`, 
+      { cache: "no-store" }
+    )
 
-    if (!statsRes.ok || !contestRes.ok) {
-      console.error(`LeetCode APIs failed. Stats: ${statsRes.status}, Contest: ${contestRes.status}`)
+    if (!statsRes.ok) {
+      console.warn(`LeetCode Stats API failed with status ${statsRes.status}, using fallback`)
       return getFallbackLeetCodeStats()
     }
 
     const statsData = await statsRes.json()
-    const contestData = await contestRes.json()
 
-    if (statsData.errors) {
-      console.error("LeetCode Stats API error:", statsData.errors)
+    if (statsData.errors || !statsData.totalSolved) {
+      console.warn("LeetCode Stats API returned invalid data, using fallback")
       return getFallbackLeetCodeStats()
     }
 
-    // Safely calculate acceptance rate from the Faisal API format
-    const allSubmissions = statsData.totalSubmissions?.find((x: any) => x.difficulty === "All")
-    const totalSubmissionsCount = allSubmissions?.submissions || 0
-    const totalSolved = statsData.totalSolved || 0
-    const acceptanceRate = totalSubmissionsCount > 0 
-      ? Math.round((totalSolved / totalSubmissionsCount) * 1000) / 10 
-      : 0
+    // Try to fetch contest data but don't fail if unavailable (rate limiting)
+    let contestData = {
+      contestRating: 0,
+      contestBadges: { name: "" },
+      contestGlobalRanking: 0,
+      contestAttend: 0,
+      totalParticipants: 0,
+      contestTopPercentage: 100,
+    }
+
+    try {
+      const contestRes = await fetch(
+        `https://alfa-leetcode-api.onrender.com/${username}/contest`, 
+        { cache: "no-store" }
+      )
+      
+      if (contestRes.ok) {
+        contestData = await contestRes.json()
+      } else if (contestRes.status === 429) {
+        console.warn("LeetCode Contest API rate limited (429), using default contest stats")
+      }
+    } catch (err) {
+      console.warn("Failed to fetch contest data, continuing with stats only", err)
+    }
 
     return {
-      // Problem Stats (Corrected JSON keys!)
+      // Problem Stats
       totalSolved: statsData.totalSolved || 0,
       totalQuestions: statsData.totalQuestions || 3549, 
       easySolved: statsData.easySolved || 0,
       mediumSolved: statsData.mediumSolved || 0,
       hardSolved: statsData.hardSolved || 0,
-      acceptanceRate: acceptanceRate || 0,
+      acceptanceRate: statsData.acceptanceRate || 0,
       ranking: statsData.ranking || 0,
       contributionPoints: statsData.contributionPoints || 0,
       reputation: statsData.reputation || 0,
       
       // Contest Stats
-      contestRating: Math.round(contestData.contestRating) || 0,
-      contestBadge: contestData.contestBadges?.name || "",
-      contestRanking: contestData.contestGlobalRanking || 0,
-      contestsAttended: contestData.contestAttend || 0,
-      totalContestParticipants: contestData.totalParticipants || 0,
-      topPercentage: contestData.contestTopPercentage || 100,
+      contestRating: contestData?.contestRating ? Math.round(contestData.contestRating) : 0,
+      contestBadge: contestData?.contestBadges?.name || "",
+      contestRanking: contestData?.contestGlobalRanking || 0,
+      contestsAttended: contestData?.contestAttend || 0,
+      totalContestParticipants: contestData?.totalParticipants || 0,
+      topPercentage: contestData?.contestTopPercentage || 100,
       recentContests: [],
     }
   } catch (error) {
@@ -72,7 +88,7 @@ export async function fetchCodeChefStats() {
     const username = "abhijeet73"
     
     // CodeChef's internal APIs block external requests. 
-    // We use a popular community proxy specifically designed for CodeChef portfolios.
+    // We use a popular community proxy
     const apiUrl = `https://codechef-api.vercel.app/handle/${username}`
     
     const response = await fetch(apiUrl, { cache: "no-store" })

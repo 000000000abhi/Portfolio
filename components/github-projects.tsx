@@ -20,6 +20,7 @@ interface Repository {
   watchers_count: number
   language: string | null
   topics: string[]
+  updated_at: string
 }
 
 export function GitHubProjects() {
